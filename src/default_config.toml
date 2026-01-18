@@ -1,0 +1,26 @@
+# Halo Configuration
+
+# Define slots for your radial menu.
+# Directions: North, NorthEast, East, SouthEast, South, SouthWest, West, NorthWest
+
+# Example slots:
+
+[[slots]]
+direction = "North"
+app = "zen" # browser
+
+[[slots]]
+direction = "East"
+app = "ghostty" # terminal
+
+[[slots]]
+direction = "South"
+app = "dolphin" # files
+
+[[slots]]
+direction = "West"
+app = "spotify" # music
+
+[[slots]]
+direction = "SE"
+app = "vesktop" # discord
