@@ -3,6 +3,7 @@ use hyprland::data::{Clients, CursorPosition, Monitors};
 use hyprland::dispatch::{Dispatch, DispatchType, WindowIdentifier};
 use hyprland::error::HyprError;
 use hyprland::prelude::*;
+use hyprland::shared::Address;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -50,10 +51,10 @@ pub fn get_active_classes() -> Vec<WindowClass> {
         .unwrap_or_default()
 }
 
-pub fn focus_window(class: &WindowClass) -> Result<(), HyprError> {
-    Dispatch::call(DispatchType::FocusWindow(
-        WindowIdentifier::ClassRegularExpression(&class.0),
-    ))
+pub fn focus_window(address: &Address) -> Result<(), HyprError> {
+    Dispatch::call(DispatchType::FocusWindow(WindowIdentifier::Address(
+        address.clone(),
+    )))
 }
 
 pub fn close_window(class: &WindowClass) -> Result<(), HyprError> {
@@ -82,11 +83,14 @@ pub fn get_cursor_pos_on_active_monitor() -> Option<Point> {
 }
 
 pub fn run_or_raise(class: &WindowClass, exec: &ShellCommand) -> Result<(), RunOrRaiseError> {
-    if Clients::get()?
-        .iter()
-        .any(|c| c.class.eq_ignore_ascii_case(&class.0))
-    {
-        focus_window(class)?;
+    let target = class.0.to_ascii_lowercase();
+    let match_found = Clients::get()?.into_iter().find(|c| {
+        let w_class = c.class.to_ascii_lowercase();
+        w_class.contains(&target) || target.contains(&w_class)
+    });
+
+    if let Some(client) = match_found {
+        focus_window(&client.address)?;
     } else {
         std::process::Command::new("sh")
             .arg("-c")
