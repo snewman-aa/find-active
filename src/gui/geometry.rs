@@ -10,6 +10,14 @@ pub struct SlotGeometry {
 }
 
 impl SlotGeometry {
+    pub fn angle(index: usize) -> f64 {
+        START_OFFSET + (index as f64 * ANGLE_STEP)
+    }
+
+    pub fn angle_difference(a: f64, b: f64) -> f64 {
+        ((a - b + PI).rem_euclid(2.0 * PI) - PI).abs()
+    }
+
     pub fn calculate(
         index: usize,
         filled_indices: &[usize],
@@ -37,7 +45,7 @@ impl SlotGeometry {
         let scale = (width / ANGLE_STEP).sqrt().min(2.5);
         let current_slot_radius = SLOT_RADIUS * scale * scale_factor;
 
-        let angle = START_OFFSET + (index as f64 * ANGLE_STEP);
+        let angle = Self::angle(index);
         let (x, y) = (
             center.x + (MENU_RADIUS * scale_factor) * angle.cos(),
             center.y + (MENU_RADIUS * scale_factor) * angle.sin(),

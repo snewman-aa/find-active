@@ -2,8 +2,8 @@ use crate::config::{Config, SlotConfig};
 use crate::gui::geometry::SlotGeometry;
 use crate::gui::ui::ThemeColors;
 use crate::gui::{
-    ANGLE_STEP, CENTER_CIRCLE_RADIUS, ICON_INACTIVE_ALPHA, ICON_SIZE, INNER_RADIUS, OUTER_RADIUS,
-    REFERENCE_HEIGHT, SLOT_COUNT, START_OFFSET,
+    CENTER_CIRCLE_RADIUS, ICON_INACTIVE_ALPHA, ICON_SIZE, INNER_RADIUS, OUTER_RADIUS,
+    REFERENCE_HEIGHT, SLOT_COUNT,
 };
 use crate::sys::desktop::AppInfo;
 use crate::sys::wm::{Point, WindowClass};
@@ -136,22 +136,15 @@ impl State {
         dy.atan2(dx)
     }
 
-    fn slot_angle(index: usize) -> f64 {
-        START_OFFSET + (index as f64 * ANGLE_STEP)
-    }
-
-    fn angle_difference(a: f64, b: f64) -> f64 {
-        ((a - b + PI).rem_euclid(2.0 * PI) - PI).abs()
-    }
-
     fn find_nearest_slot(&self, cursor: Point) -> Option<usize> {
         let cursor_angle = self.cursor_angle(cursor);
 
         (0..SLOT_COUNT)
             .filter(|&i| self.slots[i].app.is_some())
             .min_by(|&a, &b| {
-                Self::angle_difference(cursor_angle, Self::slot_angle(a))
-                    .total_cmp(&Self::angle_difference(cursor_angle, Self::slot_angle(b)))
+                SlotGeometry::angle_difference(cursor_angle, SlotGeometry::angle(a)).total_cmp(
+                    &SlotGeometry::angle_difference(cursor_angle, SlotGeometry::angle(b)),
+                )
             })
     }
 
