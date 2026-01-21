@@ -84,20 +84,38 @@ pub fn get_cursor_pos_on_active_monitor() -> Option<Point> {
 
 pub fn run_or_raise(class: &WindowClass, exec: &ShellCommand) -> Result<(), RunOrRaiseError> {
     let target = class.0.to_ascii_lowercase();
-    let match_found = Clients::get()?.into_iter().find(|c| {
-        let w_class = c.class.to_ascii_lowercase();
-        w_class.contains(&target) || target.contains(&w_class)
-    });
 
-    if let Some(client) = match_found {
-        focus_window(&client.address)?;
-    } else {
-        std::process::Command::new("sh")
-            .arg("-c")
-            .arg(&exec.0)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()?;
+    #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+    enum MatchScore {
+        NoMatch,
+        Fuzzy,
+        Component,
+        Exact,
     }
-    Ok(())
+    Clients::get()?
+        .into_iter()
+        .map(|c| {
+            let w_class = c.class.to_ascii_lowercase();
+            let score = match w_class {
+                ref s if s == &target => MatchScore::Exact,
+                ref s if s.split('.').any(|p| p == target) => MatchScore::Component,
+                ref s if s.contains(&target) || target.contains(s) => MatchScore::Fuzzy,
+                _ => MatchScore::NoMatch,
+            };
+            (score, c)
+        })
+        .filter(|(score, _)| *score > MatchScore::NoMatch)
+        .max_by_key(|(score, _)| *score)
+        .map_or_else(
+            || {
+                std::process::Command::new("sh")
+                    .arg("-c")
+                    .arg(&exec.0)
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .spawn()?;
+                Ok(())
+            },
+            |(_, client)| focus_window(&client.address).map_err(RunOrRaiseError::from),
+        )
 }
