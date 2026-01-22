@@ -19,9 +19,9 @@ I wanted a shell that allows me to quickly navigate my most used apps without ne
 ## Features
 
 - **Radial Menu (Halo):** Your favorite apps, immediately surrounding your cursor at a moment's notice
-- **Run or Raise:** Intelligent application switching. If an app is running, it focuses it, otherwise, it launches it
+- **Run or Raise:** If an app is running, it focuses it, otherwise, it launches it
 - **XDG Utilization:** Uses `.desktop` entries to find icons, window classes, and execution strings from app names
-- **Dynamic Theming:** Automatically extracts colors from your active GTK theme
+- **Dynamic Theming:** Uses colors from your active GTK theme
 - **Live Configuration:** Updates slots and mappings when the configuration changes
 
 ## Installation
@@ -34,21 +34,33 @@ The easiest way to install Halo on Arch Linux is via the AUR:
 paru -S halo-git
 ```
 
+### Build from Source
+
+If you are not on Arch, you can build from source. You will need **Rust**, **GTK4**, and **gtk4-layer-shell**.
+
+**Install:**
+
+```bash
+git clone https://github.com/snewman-aa/halo
+cd halo
+cargo install --path .
+```
+
 ## Usage
 
 ### 1. Start the Halo Daemon
 Halo runs as a daemon. Add it to your execs in your Hyprland config:
 
-```bash
-# hyprland.conf
+```hyprlang
 exec-once = halo
 ```
 
 ### 2. Configure Keybindings
-To trigger the radial **Halo** menu, bind `hypraise show` and `hypraise hide` to a key. Using `bind` for show and `bindr` (release) for hide enables a sort of *hold-to-show* experience.
+To trigger the radial **Halo** menu, bind `hypraise show`. `hypraise hide` can also be bound.
+
+Using `bind` for show and `bindr` (release) for hide enables a sort of *hold-to-show* behavior:
 
 ```hyprlang
-# hyprland.conf
 bind = SUPER, grave, exec, hypraise show
 bindr = SUPER, grave, exec, hypraise hide
 ```
@@ -56,13 +68,17 @@ bindr = SUPER, grave, exec, hypraise hide
 > [!NOTE]
 > I haven't been able to get the hold-to-show behavior to work with mouse bindings (like Mouse 5)
 
-I use Mouse 5 `mouse:276` in my config to make it a complete mouse experience. Holding a key like `Ctrl` allows apps like your browser to still capture Mouse 5 for *Forward*.
-
-With this config, left click in the deadzone to close **Halo**:
+I use Mouse 5 `mouse:276` in my config to make it solely a mouse experience. Holding a key like `Ctrl` allows apps like your browser to still capture Mouse 5 for *Forward*.
 
 ```hyprlang
 bind = ,mouse:276, exec, hypraise show
 ```
+
+### 3. **Halo Behavior**
+
+- Flick cursor toward app icon to *run-or-raise* it
+- Right click on an active app's icon to close it (same behavior as `killactive`, [closes (not kills) active window](https://wiki.hypr.land/Configuring/Dispatchers/))
+- Left click in the deadzone to close overlay
 
 ### 3. CLI "Run or Raise"
 You can also use `hypraise` as a standalone utility for specific apps:
@@ -123,7 +139,7 @@ app = "vesktop" # discord
 
 ## TODOs
 
-- [x] **Close via Right-Click:** Allow right-clicking an icon of an open application to close it (via Hyprland `closewindow`)
 - [ ] **Live Application Updates:** File watcher for desktop entry directories to automatically refresh the app cache when new software is installed
-- [ ] **Active Apps List:** List all currently running apps (with desktop entries) that aren't assigned to a radial slot (potentially with assigned keybinds)
+- [ ] **Move Windows:** Move hovered app's window to workspace with keybind
+- [ ] **Active Apps List:** List all currently running apps (with desktop entries) that aren't assigned to a slot (potentially with assigned keybinds)
 - [ ] **Eye Candy:** Add animations for menu transitions and icon selection (low priority)
