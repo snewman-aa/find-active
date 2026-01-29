@@ -1,10 +1,12 @@
 # Halo & Hypraise
 
-A radial menu and *run or raise* utility designed specifically for Hyprland, built with the [**Relm4**](https://github.com/Relm4/relm4) framework.
+A *run or raise* utility and radial menu designed specifically for Hyprland.
 
-Halo provides a GTK4-based radial menu that appears at your cursor, allowing you to quickly switch between applications or launch new ones using directional flicks.
+This project is split into two components:
+- **Hypraise**: The core logic library and a standalone CLI tool. It handles window management (via Hyprland's IPC), desktop entry parsing, and fuzzy matching.
+- **Halo**: A GTK4-based radial menu that depends on Hypraise for its core functionality. Built with [*Realm4*](https://github.com/Realm4/realm4)
 
-Hypraise is the companion CLI that handles the *run or raise* logic and communicates with the Halo daemon.
+Those who want the *run or raise* functionality for their own keybinds without a GUI can install and use **Hypraise** on its own.
 
 ## Motivation
 
@@ -18,84 +20,89 @@ I wanted a shell that allows me to quickly navigate my most used apps without ne
 
 ## Features
 
-- **Radial Menu (Halo):** Your favorite apps, immediately surrounding your cursor at a moment's notice
-- **Run or Raise:** If an app is running, it focuses it, otherwise, it launches it
-- **XDG Utilization:** Uses `.desktop` entries to find icons, window classes, and execution strings from app names
-- **Dynamic Theming:** Uses colors from your active GTK theme
-- **Live Configuration:** Updates slots and mappings when the configuration changes
+- **Run or Raise:** If an app is running, it focuses it; otherwise, it launches it
+- **XDG Utilization:** Parses `.desktop` entries to resolve icons, window classes, and execution strings
+- **Radial Menu (Halo):** A quick-access menu that appears at your cursor for mouse-driven navigation
+- **Dynamic Theming:** Extracts colors from your active GTK theme
+- **Live Configuration:** Updates slots and mappings automatically when `config.toml` changes
 
 ## Installation
 
 ### AUR (Arch Linux)
 
-The easiest way to install Halo on Arch Linux is via the AUR:
+The easiest way to install on Arch Linux is via the AUR:
 
 ```bash
+# To install everything (GUI + CLI)
 paru -S halo-git
+
+# To install only the CLI logic (if you don't want the GUI)
+paru -S hypraise-git
 ```
 
 ### Build from Source
 
-If you are not on Arch, you can build from source. You will need **Rust**, **GTK4**, and **gtk4-layer-shell**.
+You will need **Rust** installed. If building the GUI (**Halo**), you also need **GTK4** and **gtk4-layer-shell**.
 
-**Install:**
-
+#### Option 1: Install everything
 ```bash
 git clone https://github.com/snewman-aa/halo
 cd halo
-cargo install --path .
+cargo install --path crates/hypraise
+cargo install --path crates/halo
+```
+
+#### Option 2: Install only the CLI (Hypraise)
+If you only want the *run or raise* logic for your Hyprland keybinds:
+```bash
+cargo install --path crates/hypraise
 ```
 
 ## Usage
 
-### 1. Start the Halo Daemon
-Halo runs as a daemon. Add it to your execs in your Hyprland config:
+### CLI (Hypraise)
+`hypraise` can be used as a standalone utility for specific apps. It uses `.desktop` entries by default, or you can specify a target app class and launch command.
 
+```bash
+# Focus or launch Zen Browser
+hypraise zen
+
+# Use a specific class and command (skips desktop entry lookup)
+hypraise "My App" --class "my-app-class" --exec "/path/to/app"
+```
+
+An example Hyprland keybind of mine:
+```hyprlang
+bind = Super, A, exec, hypraise zen
+```
+
+### GUI (Halo)
+Halo runs as a daemon and provides the radial menu.
+
+#### 1. Start Halo Daemon
+Add it to your Hyprland config:
 ```hyprlang
 exec-once = halo
 ```
 
-### 2. Configure Keybindings
-To trigger the radial **Halo** menu, bind `hypraise show`. `hypraise hide` can also be bound.
+#### 2. Trigger the Menu
+To trigger the menu, use the `hypraise show` and (optionally) `hypraise hide` commands.
 
-Using `bind` for show and `bindr` (release) for hide enables a sort of *hold-to-show* behavior:
-
+Using `bind` for show and `bindr` (release) for hide enables *hold-to-show* behavior:
 ```hyprlang
 bind = SUPER, grave, exec, hypraise show
 bindr = SUPER, grave, exec, hypraise hide
 ```
 
 > [!NOTE]
-> I haven't been able to get the hold-to-show behavior to work with mouse bindings (like Mouse 5)
+> I haven't been able to get the hold-to-show behavior to work with mouse bindings (like Mouse 5).
+> I use Mouse 5 `mouse:276` in my config to make it solely a mouse experience:
+> `bind = ,mouse:276, exec, hypraise show`
 
-I use Mouse 5 `mouse:276` in my config to make it solely a mouse experience. Holding a key like `Ctrl` allows apps like your browser to still capture Mouse 5 for *Forward*.
-
-```hyprlang
-bind = ,mouse:276, exec, hypraise show
-```
-
-### 3. **Halo Behavior**
-
-- Flick cursor toward app icon to *run-or-raise* it
-- Right click on an active app's icon to close it (same behavior as `killactive`, [closes (not kills) active window](https://wiki.hypr.land/Configuring/Dispatchers/))
-- Left click in the deadzone to close overlay
-
-### 3. CLI "Run or Raise"
-You can also use `hypraise` as a standalone utility for specific apps:
-
-```bash
-# Focus or launch Firefox
-hypraise firefox
-
-# Use a specific class and command
-hypraise "My App" --class "my-app-class" --exec "/path/to/app"
-```
-
-I have a couple binds using this, a la
-
-```hyprlang
-bind = Super, A, exec, hypraise zen
-```
+### Halo Interaction
+- **Flick** cursor toward an icon to *run-or-raise* it
+- **Right Click** an icon to close the application (uses `killactive`)
+- **Left Click** in the center or outside the icons to dismiss the menu
 
 ## Configuration
 
@@ -135,7 +142,7 @@ app = "vesktop" # discord
 - `exec`: (Optional) The command to execute
 
 > [!NOTE]
-> If both `class` and `exec` are provided, they will override the desktop entry
+> If both `class` and `exec` are provided, they will override the desktop entry.
 
 ## TODOs
 
