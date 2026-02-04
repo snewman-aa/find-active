@@ -1,6 +1,6 @@
 use crate::config;
 use crate::events::AppEvent;
-use crate::gui::menu::{self, State};
+use crate::gui::menu::{self, SUB_KEYS, State};
 use crate::gui::theme::{self, ThemeColors};
 use crate::gui::window;
 use gtk::prelude::*;
@@ -23,6 +23,7 @@ pub enum AppMsg {
     Show,
     Hide,
     Click(u32),
+    KeyPress(char),
     CursorMove(Point),
     ConfigReload,
 }
@@ -66,6 +67,9 @@ impl SimpleComponent for AppModel {
                     if key == gtk::gdk::Key::Escape {
                         sender.input(AppMsg::Hide);
                         return glib::Propagation::Stop;
+                    } else if let Some(c) = key.to_unicode()
+                        && SUB_KEYS.contains(&c) {
+                        sender.input(AppMsg::KeyPress(c))
                     }
                     glib::Propagation::Proceed
                 }
@@ -188,6 +192,14 @@ impl SimpleComponent for AppModel {
                                 log::error!("Failed to close window: {}", e);
                             }
                         });
+                }
+                self.visible = false;
+            }
+            AppMsg::KeyPress(c) => {
+                let state = self.state.borrow();
+                if let Some(app) = state.subslots.iter().find(|s| s.key == c).or(None) {
+                    wm::focus_window(&app.client.address)
+                        .unwrap_or_else(|e| log::error!("Failed to focus app: {}", e))
                 }
                 self.visible = false;
             }
