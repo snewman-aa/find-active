@@ -232,6 +232,7 @@ pub struct State {
     pub active_classes: Vec<WindowClass>,
     pub scale_factor: f64,
     pub slot_geometries: Vec<Option<SlotGeometry>>,
+    pub show_subslots: bool,
 }
 
 impl State {
@@ -240,6 +241,7 @@ impl State {
         center: Point,
         active_classes: Vec<WindowClass>,
         scale_factor: f64,
+        show_subslots: bool,
     ) -> Self {
         let mut state = Self {
             center,
@@ -249,6 +251,7 @@ impl State {
             active_classes,
             scale_factor,
             slot_geometries: Vec::new(),
+            show_subslots,
         };
         state.recalculate_geometries();
         state
@@ -331,34 +334,35 @@ impl State {
 
         // subslots
         self.subslots.clear();
-        let sub_clients = get_active_clients().into_iter().filter(|c| {
-            let slot_classes = self
-                .slots
-                .iter()
-                .filter_map(|s| s.app.as_ref())
-                .map(|app| app.class.to_lowercase())
-                .collect::<Vec<_>>();
-            !slot_classes.contains(&c.class.to_lowercase())
-        });
-
-        for (sc, shortcut) in sub_clients.zip(SUB_KEYS) {
-            let query = AppQuery::new(sc.class.to_string());
-            let app_info = desktop::find_desktop_entry(&query);
-            let pixbuf = app_info.as_ref().and_then(Slot::load_icon);
-
-            // placeholder geometry
-            let geometry = SlotGeometry {
-                center,
-                radius: 0.0,
-                scale: 0.0,
-            };
-
-            self.subslots.push(SubSlot {
-                client: sc,
-                key: *shortcut,
-                geometry,
-                pixbuf,
+        if self.show_subslots {
+            let sub_clients = get_active_clients().into_iter().filter(|c| {
+                let slot_classes = self
+                    .slots
+                    .iter()
+                    .filter_map(|s| s.app.as_ref())
+                    .map(|app| app.class.to_lowercase())
+                    .collect::<Vec<_>>();
+                !slot_classes.contains(&c.class.to_lowercase())
             });
+
+            for (sc, shortcut) in sub_clients.zip(SUB_KEYS) {
+                let query = AppQuery::new(sc.class.to_string());
+                let app_info = desktop::find_desktop_entry(&query);
+                let pixbuf = app_info.as_ref().and_then(Slot::load_icon);
+
+                let geometry = SlotGeometry {
+                    center,
+                    radius: 0.0,
+                    scale: 0.0,
+                };
+
+                self.subslots.push(SubSlot {
+                    client: sc,
+                    key: *shortcut,
+                    geometry,
+                    pixbuf,
+                });
+            }
         }
 
         self.recalculate_geometries();

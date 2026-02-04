@@ -231,6 +231,7 @@ impl SimpleComponent for AppModel {
                 Ok(new_config) => {
                     let new_slots = State::init_slots(&new_config);
                     self.state.borrow_mut().slots = new_slots;
+                    self.state.borrow_mut().show_subslots = new_config.show_active_clients;
                     self.drawing_area.queue_draw();
                     log::info!("Configuration reloaded");
                 }

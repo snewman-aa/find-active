@@ -1,5 +1,9 @@
 # Halo Configuration
 
+# Show active clients that are not in the main slots as small floating subslots
+# Default: false
+show_active_clients = false
+
 # Define slots for your radial menu.
 # Directions: North, NorthEast, East, SouthEast, South, SouthWest, West, NorthWest
 
