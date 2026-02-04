@@ -1,11 +1,14 @@
 use crate::events::AppEvent;
 use async_channel::Sender;
 use std::thread;
-use tokio::runtime::Runtime;
+use tokio::runtime::Builder;
 
 pub fn start_background_services(tx: Sender<AppEvent>) {
     thread::spawn(move || {
-        let rt = Runtime::new().expect("Failed to create Tokio runtime");
+        let rt = Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create Tokio runtime");
 
         rt.block_on(async {
             {
