@@ -1,12 +1,88 @@
 use crate::config::{Config, SlotConfig};
 use crate::gui::menu::{
     ANGLE_STEP, ICON_SIZE, INNER_RADIUS, MENU_RADIUS, OUTER_RADIUS, REFERENCE_HEIGHT, SLOT_COUNT,
-    SLOT_RADIUS, START_OFFSET,
+    SLOT_RADIUS, START_OFFSET, SUB_KEYS, SUBSLOT_RING_RADIUS_FACTOR, SUBSLOT_SCALE_FACTOR,
+    SUBSLOT_SIZE_FACTOR,
 };
+use derive_more::{From, Into};
 use gdk_pixbuf::Pixbuf;
-use hypraise::desktop::AppInfo;
-use hypraise::wm::{Point, WindowClass};
+use hypraise::desktop::{self, AppInfo, AppQuery};
+use hypraise::wm::{ActiveClient, Point, WindowClass, get_active_clients};
 use std::f64::consts::PI;
+use std::ops::{Add, Div, Mul, Sub};
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, From, Into)]
+pub struct Radians(pub f64);
+
+impl Add for Radians {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self {
+        Self(self.0 + rhs.0)
+    }
+}
+
+impl Sub for Radians {
+    type Output = Self;
+    fn sub(self, rhs: Self) -> Self {
+        Self(self.0 - rhs.0)
+    }
+}
+
+impl Mul<f64> for Radians {
+    type Output = Self;
+    fn mul(self, rhs: f64) -> Self {
+        Self(self.0 * rhs)
+    }
+}
+
+impl Div<f64> for Radians {
+    type Output = Self;
+    fn div(self, rhs: f64) -> Self {
+        Self(self.0 / rhs)
+    }
+}
+
+impl Radians {
+    pub fn new(val: f64) -> Self {
+        Self(val)
+    }
+
+    pub fn sin(self) -> f64 {
+        self.0.sin()
+    }
+
+    pub fn cos(self) -> f64 {
+        self.0.cos()
+    }
+
+    pub fn atan(val: f64) -> Self {
+        Self(val.atan())
+    }
+
+    pub fn normalize(self) -> Self {
+        // normalize to [-PI, PI]
+        Self((self.0 + PI).rem_euclid(2.0 * PI) - PI)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct AngularSegment {
+    pub start: Radians,
+    pub end: Radians,
+}
+
+impl AngularSegment {
+    pub fn new(start: f64, end: f64) -> Self {
+        Self {
+            start: Radians(start),
+            end: Radians(end),
+        }
+    }
+
+    pub fn len(&self) -> f64 {
+        self.end.0 - self.start.0
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct SlotGeometry {
@@ -16,12 +92,12 @@ pub struct SlotGeometry {
 }
 
 impl SlotGeometry {
-    pub fn angle(index: usize) -> f64 {
-        START_OFFSET + (index as f64 * ANGLE_STEP)
+    pub fn angle(index: usize) -> Radians {
+        Radians(START_OFFSET + (index as f64 * ANGLE_STEP))
     }
 
     pub fn angle_difference(a: f64, b: f64) -> f64 {
-        // Normalize the difference to [-PI, PI] to find the shortest path around the circle
+        // Normalize the difference to [-PI, PI]
         ((a - b + PI).rem_euclid(2.0 * PI) - PI).abs()
     }
 
@@ -68,6 +144,26 @@ impl SlotGeometry {
             center: Point::new(x, y),
             radius: current_slot_radius,
             scale,
+        }
+    }
+
+    pub fn calculate_ring(index: usize, total: usize, center: Point, scale_factor: f64) -> Self {
+        let angle = Radians(-PI / 2.0 + (index as f64 / total as f64) * 2.0 * PI);
+        Self::from_angle(angle, center, scale_factor)
+    }
+
+    pub fn from_angle(angle: Radians, center: Point, scale_factor: f64) -> Self {
+        let radius_dist = OUTER_RADIUS * SUBSLOT_RING_RADIUS_FACTOR * scale_factor;
+
+        let (x, y) = (
+            center.x + radius_dist * angle.cos(),
+            center.y + radius_dist * angle.sin(),
+        );
+
+        Self {
+            center: Point::new(x, y),
+            radius: SLOT_RADIUS * SUBSLOT_SIZE_FACTOR * scale_factor,
+            scale: SUBSLOT_SCALE_FACTOR,
         }
     }
 }
@@ -120,13 +216,23 @@ impl Slot {
     }
 }
 
+#[derive(Clone)]
+pub struct SubSlot {
+    pub client: ActiveClient,
+    pub key: char,
+    pub geometry: SlotGeometry,
+    pub pixbuf: Option<Pixbuf>,
+}
+
 pub struct State {
     pub center: Point,
     pub slots: Vec<Slot>,
+    pub subslots: Vec<SubSlot>,
     pub hover_index: Option<usize>,
     pub active_classes: Vec<WindowClass>,
     pub scale_factor: f64,
     pub slot_geometries: Vec<Option<SlotGeometry>>,
+    pub show_subslots: bool,
 }
 
 impl State {
@@ -135,14 +241,17 @@ impl State {
         center: Point,
         active_classes: Vec<WindowClass>,
         scale_factor: f64,
+        show_subslots: bool,
     ) -> Self {
         let mut state = Self {
             center,
             slots,
+            subslots: Vec::new(),
             hover_index: None,
             active_classes,
             scale_factor,
             slot_geometries: Vec::new(),
+            show_subslots,
         };
         state.recalculate_geometries();
         state
@@ -201,8 +310,8 @@ impl State {
         (0..SLOT_COUNT)
             .filter(|&i| self.slots[i].app.is_some())
             .min_by(|&a, &b| {
-                SlotGeometry::angle_difference(cursor_angle, SlotGeometry::angle(a)).total_cmp(
-                    &SlotGeometry::angle_difference(cursor_angle, SlotGeometry::angle(b)),
+                SlotGeometry::angle_difference(cursor_angle, SlotGeometry::angle(a).0).total_cmp(
+                    &SlotGeometry::angle_difference(cursor_angle, SlotGeometry::angle(b).0),
                 )
             })
     }
@@ -222,6 +331,40 @@ impl State {
         self.center = center;
         self.hover_index = None;
         self.scale_factor = monitor_height / REFERENCE_HEIGHT;
+
+        // subslots
+        self.subslots.clear();
+        if self.show_subslots {
+            let sub_clients = get_active_clients().into_iter().filter(|c| {
+                let slot_classes = self
+                    .slots
+                    .iter()
+                    .filter_map(|s| s.app.as_ref())
+                    .map(|app| app.class.to_lowercase())
+                    .collect::<Vec<_>>();
+                !slot_classes.contains(&c.class.to_lowercase())
+            });
+
+            for (sc, shortcut) in sub_clients.zip(SUB_KEYS) {
+                let query = AppQuery::new(sc.class.to_string());
+                let app_info = desktop::find_desktop_entry(&query);
+                let pixbuf = app_info.as_ref().and_then(Slot::load_icon);
+
+                let geometry = SlotGeometry {
+                    center,
+                    radius: 0.0,
+                    scale: 0.0,
+                };
+
+                self.subslots.push(SubSlot {
+                    client: sc,
+                    key: *shortcut,
+                    geometry,
+                    pixbuf,
+                });
+            }
+        }
+
         self.recalculate_geometries();
     }
 
@@ -235,17 +378,145 @@ impl State {
 
     fn recalculate_geometries(&mut self) {
         let filled_indices = self.filled_slot_indices();
+        self.slot_geometries = self.calculate_main_slots(&filled_indices);
 
-        self.slot_geometries = self
-            .slots
+        let segments = self.find_free_segments();
+        self.distribute_subslots(&segments);
+    }
+
+    fn calculate_main_slots(&self, filled_indices: &[usize]) -> Vec<Option<SlotGeometry>> {
+        self.slots
             .iter()
             .enumerate()
             .map(|(i, slot)| {
                 slot.app.as_ref().map(|_| {
-                    SlotGeometry::calculate(i, &filled_indices, self.center, self.scale_factor)
+                    SlotGeometry::calculate(i, filled_indices, self.center, self.scale_factor)
                 })
             })
+            .collect()
+    }
+
+    fn find_free_segments(&self) -> Vec<AngularSegment> {
+        let mut free_segments = vec![AngularSegment::new(-PI, PI)];
+
+        for (i, geom) in self.slot_geometries.iter().enumerate() {
+            if let Some(g) = geom {
+                let center_angle = SlotGeometry::angle(i).normalize();
+
+                let distance = MENU_RADIUS * self.scale_factor;
+                // padding
+                let half_angle = Radians::atan(g.radius * 1.3 / distance);
+
+                let start = center_angle - half_angle;
+                let end = center_angle + half_angle;
+
+                let mut block_intervals = Vec::new();
+
+                if start.0 < -PI {
+                    // wraps past -PI
+                    block_intervals.push(AngularSegment::new(-PI, end.0));
+                    block_intervals.push(AngularSegment::new(start.0 + 2.0 * PI, PI));
+                } else if end.0 > PI {
+                    // wraps past PI
+                    block_intervals.push(AngularSegment::new(start.0, PI));
+                    block_intervals.push(AngularSegment::new(-PI, end.0 - 2.0 * PI));
+                } else {
+                    block_intervals.push(AngularSegment { start, end });
+                }
+
+                for block in block_intervals {
+                    let mut new_segments = Vec::new();
+                    for seg in free_segments {
+                        if seg.end <= block.start || seg.start >= block.end {
+                            new_segments.push(seg);
+                        } else {
+                            if seg.start < block.start {
+                                new_segments.push(AngularSegment {
+                                    start: seg.start,
+                                    end: block.start,
+                                });
+                            }
+                            if seg.end > block.end {
+                                new_segments.push(AngularSegment {
+                                    start: block.end,
+                                    end: seg.end,
+                                });
+                            }
+                        }
+                    }
+                    free_segments = new_segments;
+                }
+            }
+        }
+        free_segments
+    }
+
+    fn distribute_subslots(&mut self, free_segments: &[AngularSegment]) {
+        let subslot_count = self.subslots.len();
+        if subslot_count == 0 {
+            return;
+        }
+
+        let total_free_length: f64 = free_segments.iter().map(|s| s.len()).sum();
+
+        let segments = if total_free_length < 0.1 {
+            vec![AngularSegment::new(-PI, PI)]
+        } else {
+            free_segments.to_vec()
+        };
+        let valid_total_length: f64 = segments.iter().map(|s| s.len()).sum();
+
+        // calculate ideal fractional counts
+        let allocations: Vec<f64> = segments
+            .iter()
+            .map(|s| (s.len() / valid_total_length) * subslot_count as f64)
             .collect();
+
+        // initial floor allocation
+        let mut final_counts: Vec<usize> = allocations.iter().map(|f| f.floor() as usize).collect();
+        let current_total: usize = final_counts.iter().sum();
+
+        // distribute remainder to segments with largest fractional parts
+        let remainder = subslot_count - current_total;
+        if remainder > 0 {
+            let mut indices: Vec<usize> = (0..segments.len()).collect();
+            indices.sort_by(|&a, &b| {
+                let frac_a = allocations[a].fract();
+                let frac_b = allocations[b].fract();
+                frac_b
+                    .partial_cmp(&frac_a)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+
+            for i in 0..remainder {
+                final_counts[indices[i]] += 1;
+            }
+        }
+
+        let mut subslot_iter = self.subslots.iter_mut();
+
+        for (i, seg) in segments.iter().enumerate() {
+            let count = final_counts[i];
+            if count == 0 {
+                continue;
+            }
+
+            let step = seg.len() / count as f64;
+
+            for k in 0..count {
+                if let Some(subslot) = subslot_iter.next() {
+                    // center within the allocated step
+                    let angle = seg.start + Radians(step * (k as f64 + 0.5));
+                    subslot.geometry =
+                        SlotGeometry::from_angle(angle, self.center, self.scale_factor);
+                }
+            }
+        }
+
+        for subslot in subslot_iter {
+            subslot.geometry =
+                SlotGeometry::from_angle(Radians(0.0), self.center, self.scale_factor);
+        }
     }
 }
 

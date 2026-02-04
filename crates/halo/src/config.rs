@@ -63,6 +63,8 @@ pub struct SlotConfig {
 pub struct Config {
     #[serde(default)]
     pub slots: Vec<SlotConfig>,
+    #[serde(default)]
+    pub show_active_clients: bool,
 }
 
 #[derive(Error, Debug)]
@@ -103,6 +105,7 @@ pub fn load_or_setup() -> Config {
                 class: Some(WindowClass::from("halo-setup".to_string())),
                 exec: Some(ExecCommand::from("HALO_SETUP".to_string())),
             }],
+            show_active_clients: false,
         };
     }
 
@@ -115,6 +118,7 @@ pub fn load_or_setup() -> Config {
                 class: Some(WindowClass::from("halo-setup".to_string())),
                 exec: Some(ExecCommand::from("HALO_SETUP".to_string())),
             }],
+            show_active_clients: false,
         },
     }
 }

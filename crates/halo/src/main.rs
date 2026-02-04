@@ -10,7 +10,13 @@ fn main() {
 
     let config = config::load_or_setup();
     let slots = State::init_slots(&config);
-    let state = State::new(slots, Point::default(), Vec::new(), 1.0);
+    let state = State::new(
+        slots,
+        Point::default(),
+        Vec::new(),
+        1.0,
+        config.show_active_clients,
+    );
 
     let (tx, rx) = async_channel::bounded(32);
 
